@@ -43,6 +43,14 @@
       acres: '200 Acres',
       desc: 'Land acquisition assignment undertaken for Capricorn Infrastructure across the Panvel region of Raigad, Maharashtra.',
       img: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1600&q=80'
+    },
+    conwood: {
+      tag: 'PARCEL / A—05',
+      name: 'Conwood Group',
+      location: 'Mira Road, Mumbai, Maharashtra',
+      acres: '200 Acres',
+      desc: 'Land acquisition assignment undertaken for Conwood Group across the Mira Road region of Mumbai, Maharashtra.',
+      img: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1600&q=80'
     }
   };
 
@@ -58,12 +66,13 @@
   /* ---------------------------------------------------------------------
      IMAGE FALLBACKS
   --------------------------------------------------------------------- */
-  document.querySelectorAll('img').forEach((img) => {
+  function applyImageFallback(img) {
     img.addEventListener('error', function onErr() {
       this.removeEventListener('error', onErr);
       this.src = FALLBACK_IMG;
     }, { once: true });
-  });
+  }
+  document.querySelectorAll('img').forEach(applyImageFallback);
 
   /* ---------------------------------------------------------------------
      NAV: scroll state, dark-on-dark-section, active link, scroll progress
@@ -224,32 +233,119 @@
   });
 
   /* ---------------------------------------------------------------------
-     HOSPITALITY DRAG-TO-SCROLL RAIL
+     HOSPITALITY RAIL — auto-sliding, drag/swipe-able, seamless loop
   --------------------------------------------------------------------- */
   const rail = document.getElementById('stayRail');
-  let isDown = false, startX, scrollLeft;
+  const track = document.getElementById('stayTrack');
+  let isDown = false, startX, dragScrollLeft;
+  let autoPaused = false;
+  let resumeTimer = null;
+  let loopPoint = 0;
+  let lastTick = null;
+  const AUTO_SPEED = 30; // px / second — slow, ambient drift
 
-  rail.addEventListener('pointerdown', (e) => {
-    isDown = true;
-    rail.classList.add('is-dragging');
-    startX = e.pageX - rail.offsetLeft;
-    scrollLeft = rail.scrollLeft;
-  });
-  ['pointerup', 'pointerleave'].forEach((evt) =>
-    rail.addEventListener(evt, () => { isDown = false; rail.classList.remove('is-dragging'); })
-  );
-  rail.addEventListener('pointermove', (e) => {
-    if (!isDown) return;
-    e.preventDefault();
-    const x = e.pageX - rail.offsetLeft;
-    rail.scrollLeft = scrollLeft - (x - startX) * 1.4;
-  });
-  rail.addEventListener('wheel', (e) => {
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-      rail.scrollLeft += e.deltaY;
+  let firstCloneEl = null;
+  function cloneRailCardsForLoop() {
+    if (!track || !track.children.length) return;
+    const originals = Array.from(track.children);
+    originals.forEach((card, i) => {
+      const clone = card.cloneNode(true);
+      clone.setAttribute('aria-hidden', 'true');
+      clone.querySelectorAll('img').forEach(applyImageFallback);
+      clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+      track.appendChild(clone);
+      if (i === 0) firstCloneEl = clone;
+    });
+  }
+  function measureLoopPoint() {
+    if (!track) return;
+    // Use the first clone's offset rather than scrollWidth/2 so the trailing
+    // track padding doesn't throw off the seamless loop point.
+    loopPoint = firstCloneEl ? firstCloneEl.offsetLeft : track.scrollWidth / 2;
+  }
+
+  function scheduleResume(delay) {
+    autoPaused = true;
+    if (resumeTimer) clearTimeout(resumeTimer);
+    resumeTimer = setTimeout(() => { autoPaused = false; }, delay);
+  }
+  function pauseIndefinitely() {
+    autoPaused = true;
+    if (resumeTimer) { clearTimeout(resumeTimer); resumeTimer = null; }
+  }
+
+  if (rail && track) {
+    cloneRailCardsForLoop();
+    measureLoopPoint();
+
+    let resizeT;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeT);
+      resizeT = setTimeout(measureLoopPoint, 200);
+    }, { passive: true });
+
+    rail.addEventListener('pointerdown', (e) => {
+      isDown = true;
+      pauseIndefinitely();
+      rail.classList.add('is-dragging');
+      startX = e.pageX - rail.offsetLeft;
+      dragScrollLeft = rail.scrollLeft;
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((evt) =>
+      rail.addEventListener(evt, () => {
+        if (!isDown) return;
+        isDown = false;
+        rail.classList.remove('is-dragging');
+        scheduleResume(1600);
+      })
+    );
+    rail.addEventListener('pointermove', (e) => {
+      if (!isDown) return;
       e.preventDefault();
+      const x = e.pageX - rail.offsetLeft;
+      rail.scrollLeft = dragScrollLeft - (x - startX) * 1.4;
+    });
+    rail.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        rail.scrollLeft += e.deltaY;
+        e.preventDefault();
+        scheduleResume(1600);
+      }
+    }, { passive: false });
+
+    // Pause on mouse hover, resume on mouse leave — touch handled via pointerdown/up above.
+    rail.addEventListener('pointerenter', (e) => {
+      if (e.pointerType === 'mouse') pauseIndefinitely();
+    });
+    rail.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse' && !isDown) scheduleResume(200);
+    });
+
+    // Reset timing reference when the tab regains visibility so a long
+    // background tab doesn't cause one huge jump on return.
+    document.addEventListener('visibilitychange', () => { lastTick = null; });
+
+    function normalizeLoop() {
+      if (loopPoint <= 0) return;
+      if (rail.scrollLeft >= loopPoint) rail.scrollLeft -= loopPoint;
+      else if (rail.scrollLeft < 0) rail.scrollLeft += loopPoint;
     }
-  }, { passive: false });
+
+    function autoTick(now) {
+      if (lastTick == null) lastTick = now;
+      const dt = Math.min(now - lastTick, 100); // clamp to avoid big jumps after a stall
+      lastTick = now;
+      if (!autoPaused && !isDown && loopPoint > 0 && document.visibilityState === 'visible') {
+        rail.scrollLeft += (AUTO_SPEED * dt) / 1000;
+        normalizeLoop();
+      }
+      requestAnimationFrame(autoTick);
+    }
+
+    if (!reduceMotion) {
+      requestAnimationFrame(autoTick);
+    }
+  }
 
   /* ---------------------------------------------------------------------
      ANIMATED COUNTERS
