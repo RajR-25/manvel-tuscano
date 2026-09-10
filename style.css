@@ -584,7 +584,7 @@ p { margin: 0; }
   color: var(--cream-text);
   padding: 90px 0 70px;
 }
-.stay-rail { overflow: hidden; cursor: grab; padding-left: var(--gutter); }
+.stay-rail { overflow: hidden; cursor: grab; padding-left: var(--gutter); touch-action: pan-y; }
 .stay-rail.is-dragging { cursor: grabbing; }
 .stay-track { display: flex; gap: 26px; width: max-content; padding-right: var(--gutter); }
 .stay-card { width: min(74vw, 460px); flex-shrink: 0; }
@@ -688,17 +688,18 @@ p { margin: 0; }
 .india-path {
   fill: rgba(255,255,255,0.045);
   stroke: rgba(255,255,255,0.22);
-  stroke-width: 1.4;
+  stroke-width: 1.3px;
   stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
   opacity: 0;
 }
 .india-connector {
   fill: none;
   stroke: var(--bronze-lt);
-  stroke-width: 1;
+  stroke-width: 1.4px;
   stroke-dasharray: 3 4;
   opacity: 0.55;
-  stroke-dashoffset: 400;
+  stroke-dashoffset: 220;
 }
 
 .map-markers-layer { position: absolute; inset: 0; }
